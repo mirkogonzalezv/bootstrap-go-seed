@@ -1,0 +1,47 @@
+# Go build outputs
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+
+# Vendor directory (descomenta si no quieres subir dependencias)
+# vendor/
+
+# Environment files
+.env.*
+
+#compose
+compose.yml
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+
+# MacOS
+.DS_Store
+
+# GitHub Copilot u otro
+.copilot/
+
+# Logs
+*.log
+
+# Coverage files
+coverage.out
+
+# Temporary files
+*.tmp
+tmp/
+build-errors.log
+
+# En lugar de /docs, usar:
+/docs/*.tmp
+/docs/build/
