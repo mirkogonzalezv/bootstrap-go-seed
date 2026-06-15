@@ -28,7 +28,7 @@ func NewHealthHandler(uc *usecase.HealthUseCase) *HealthHandler {
 // @Failure 503 {object} dto.ErrorResponse
 // @Router /health [get]
 func (h *HealthHandler) Health(c *gin.Context) {
-	res, err := h.uc.Execute()
+	res, err := h.uc.Execute(c.Request.Context())
 
 	if err != nil {
 		errorResponse := dto.NewErrorResponse("Service unhealthy")

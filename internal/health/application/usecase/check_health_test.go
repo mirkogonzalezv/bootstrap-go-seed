@@ -1,14 +1,24 @@
 package usecase
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
+
+type mockHealthRepository struct{}
+
+func (m *mockHealthRepository) Ping(ctx context.Context) error {
+	return nil
+}
 
 func TestHealthUseCase(t *testing.T) {
+	mockRepo := &mockHealthRepository{}
 	// Patrón
 	// 1) Arrancamos creando el use case
-	uc := NewHealthUseCase()
+	uc := NewHealthUseCase(mockRepo)
 
 	// 2) Ejecutamos el metodo
-	res, err := uc.Execute()
+	res, err := uc.Execute(context.Background())
 
 	// 3) Validamos resultados
 	if err != nil {
@@ -25,6 +35,10 @@ func TestHealthUseCase(t *testing.T) {
 
 	if res.Timestamp.IsZero() {
 		t.Errorf("Execute().Timestamp is zero, expected a valid timestamp")
+	}
+
+	if res.Database != "connected" {
+		t.Errorf("Execute().Database = %q, want %q", res.Database, "connected")
 	}
 }
 

@@ -12,6 +12,12 @@ type Configuration struct {
 	ShutDownTimeOut int    `env:"SHUTDOWN_TIMEOUT" envDefault:"30"`
 	// Se definen las variables de entorno necesarias para el proyecto
 	// DB, Redis, API_PATH, etc...
+	DBHost     string `env:"DB_HOST" envDefault:"localhost"`
+	DBPort     int    `env:"DB_PORT" envDefault:"5432"`
+	DBUser     string `env:"DB_USER" envDefault:"postgres"`
+	DBPassword string `env:"DB_PASSWORD" envDefault:"postgres"`
+	DBName     string `env:"DB_NAME" envDefault:"microservice"`
+	DBSSLMode  string `env:"DB_SSL_MODE" envDefault:"disable"`
 }
 
 func LoadVars() (*Configuration, error) {

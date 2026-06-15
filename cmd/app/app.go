@@ -18,9 +18,10 @@ import (
 )
 
 type App struct {
-	config *config.Configuration
-	router *gin.Engine
-	log    *zap.Logger
+	config    *config.Configuration
+	container *container.Container
+	router    *gin.Engine
+	log       *zap.Logger
 }
 
 func NewApp() *App {
@@ -66,11 +67,19 @@ func (a *App) Init() error {
 	// Middleware Cors
 	router.Use(cors.Default())
 
+	// Middleware Helmet
+	router.Use(middleware.SecurityHeaders())
+
 	// Otros middlewares
 	//...
 
-	container := container.NewContainer(a.config, a.log)
-	apiRouter := routes.NewAPIRouter(container)
+	c, err := container.NewContainer(a.config, a.log)
+	if err != nil {
+		return err
+	}
+	a.container = c
+
+	apiRouter := routes.NewAPIRouter(a.container)
 	apiRouter.RegisterRoutes(router)
 
 	a.router = router

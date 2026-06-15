@@ -1,19 +1,31 @@
 package usecase
 
-import "microservice/internal/health/application/dto"
+import (
+	"context"
+	"microservice/internal/health/application/dto"
+	"microservice/internal/health/domain"
+)
 
-type HealthUseCase struct{}
-
-// Constructor del Caso de Uso
-func NewHealthUseCase() *HealthUseCase {
-	return &HealthUseCase{}
+type HealthUseCase struct {
+	repo domain.HealthRepository
 }
 
-func (h *HealthUseCase) Execute() (*dto.HealthResponse, error) {
+// Constructor del Caso de Uso
+func NewHealthUseCase(repo domain.HealthRepository) *HealthUseCase {
+	return &HealthUseCase{repo: repo}
+}
+
+func (uc *HealthUseCase) Execute(ctx context.Context) (*dto.HealthResponse, error) {
+
+	dbStatus := "connected"
+
+	if err := uc.repo.Ping(ctx); err != nil {
+		dbStatus = "disconnected"
+	}
 
 	// Aqui podriamos agregar otras validaciones:
 	// - Verificar conexión a DB
 	// - Verificación con servicios externos
 	// Si alguno falla, se retorna error HTTP 503
-	return dto.NewHealthResponse(), nil
+	return dto.NewHealthResponse(dbStatus), nil
 }
