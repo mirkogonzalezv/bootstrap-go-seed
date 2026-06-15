@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func (a *App) ShutDown() {
+func (a *App) Shutdown() {
 	logger.General("Cerrando conexiones y recursos...")
 
 	// Cerramos conexiones globales

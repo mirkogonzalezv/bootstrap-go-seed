@@ -1,8 +1,6 @@
-package usecases
+package usecase
 
-import (
-	healthRes "microservice/internal/modules/health/application/dtos/response"
-)
+import "microservice/internal/health/application/dto"
 
 type HealthUseCase struct{}
 
@@ -11,11 +9,11 @@ func NewHealthUseCase() *HealthUseCase {
 	return &HealthUseCase{}
 }
 
-func (h *HealthUseCase) Execute() (*healthRes.HealthResponse, error) {
+func (h *HealthUseCase) Execute() (*dto.HealthResponse, error) {
 
 	// Aqui podriamos agregar otras validaciones:
 	// - Verificar conexión a DB
 	// - Verificación con servicios externos
 	// Si alguno falla, se retorna error HTTP 503
-	return healthRes.NewHealthResponse(), nil
+	return dto.NewHealthResponse(), nil
 }

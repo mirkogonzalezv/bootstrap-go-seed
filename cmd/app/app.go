@@ -5,11 +5,15 @@ import (
 	"microservice/cmd/container"
 	"microservice/cmd/routes"
 	"microservice/pkg/logger"
-	"microservice/pkg/middlewares"
+	"microservice/pkg/middleware"
 	"os"
+
+	_ "microservice/docs"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"go.uber.org/zap"
 )
 
@@ -23,7 +27,7 @@ func NewApp() *App {
 	return &App{}
 }
 
-func (a *App) Initializer() error {
+func (a *App) Init() error {
 	env := os.Getenv("ENVIRONMENT")
 
 	if env == "" {
@@ -33,6 +37,7 @@ func (a *App) Initializer() error {
 	config.LoadEnv(env)
 
 	logger.Init(env)
+	a.log = logger.L()
 	logger.General("==== Microservice Start ====")
 
 	cfg, err := config.LoadVars()
@@ -47,10 +52,14 @@ func (a *App) Initializer() error {
 
 	router := gin.New()
 
+	if a.config.AppEnv != "prod" {
+		router.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	}
+
 	// Aplicamos Middlewares
 	router.Use(gin.Logger())
 
-	router.Use(middlewares.ErrorHandlerMiddleware()) // Global Error Handler
+	router.Use(middleware.ErrorHandlerMiddleware(a.log)) // Global Error Handler
 
 	router.Use(gin.Recovery())
 
@@ -60,7 +69,7 @@ func (a *App) Initializer() error {
 	// Otros middlewares
 	//...
 
-	container := container.NewContainer(a.config)
+	container := container.NewContainer(a.config, a.log)
 	apiRouter := routes.NewAPIRouter(container)
 	apiRouter.RegisterRoutes(router)
 

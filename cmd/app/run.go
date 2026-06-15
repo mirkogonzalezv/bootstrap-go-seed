@@ -39,7 +39,7 @@ func (a *App) Run() error {
 		return err
 	}
 
-	a.ShutDown()
+	a.Shutdown()
 
 	logger.L().Sync()
 	logger.Success("Servidor terminado correctamente")

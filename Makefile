@@ -56,34 +56,34 @@ docs-validate: ## Validate OpenAPI specification
 	fi
 
 
-# Testing commands (solo modules)
+# Testing commands (solo)
 test: ## Run all module tests
 	@echo "$(YELLOW)Running module tests...$(NC)"
-	@go test ./internal/modules/... -v
+	@go test ./internal/... -v
 
 test-coverage: ## Run module tests with coverage
 	@echo "$(YELLOW)Running module tests with coverage...$(NC)"
 	@mkdir -p coverage
-	@go test -coverprofile=coverage/coverage.out ./internal/modules/...
+	@go test -coverprofile=coverage/coverage.out ./internal/...
 	@go tool cover -html=coverage/coverage.out -o coverage/coverage.html
 	@go tool cover -func=coverage/coverage.out
 	@echo "$(GREEN)Coverage report: coverage/coverage.html$(NC)"
 
 test-watch: ## Run module tests in watch mode
 	@echo "$(YELLOW)Running module tests in watch mode...$(NC)"
-	@find ./internal/modules -name "*.go" | entr -c go test ./internal/modules/... -v
+	@find ./internal -name "*.go" | entr -c go test ./internal/... -v
 
 test-unit: ## Run only unit tests (domain layer)
 	@echo "$(YELLOW)Running unit tests...$(NC)"
-	@go test ./internal/modules/*/domain/... -v
+	@go test ./internal/*/domain/... -v
 
 test-integration: ## Run integration tests (infrastructure layer)
 	@echo "$(YELLOW)Running integration tests...$(NC)"
-	@go test ./internal/modules/*/infrastructure/... -v
+	@go test ./internal/*/infrastructure/... -v
 
 test-business: ## Run business logic tests (application layer)
 	@echo "$(YELLOW)Running business logic tests...$(NC)"
-	@go test ./internal/modules/*/application/... -v
+	@go test ./internal/*/application/... -v
 
 
 # Security commands

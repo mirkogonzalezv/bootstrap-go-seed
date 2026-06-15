@@ -1,7 +1,7 @@
-package http
+package httputil
 
 import (
-	domainErrors "microservice/pkg/errors"
+	"microservice/pkg/apperrors"
 	"net/http"
 	"time"
 )
@@ -20,7 +20,7 @@ type ErrorDetail struct {
 
 // MapErrorToHttp convierte errores de dominio a respuestas HTTP
 func MapErrorToHttp(err error) (int, ErrorResponse) {
-	if domainErr, ok := err.(*domainErrors.DomainError); ok {
+	if domainErr, ok := err.(*apperrors.DomainError); ok {
 		statusCode := getHttpStatusCode(domainErr.Type)
 
 		return statusCode, ErrorResponse{
@@ -37,7 +37,7 @@ func MapErrorToHttp(err error) (int, ErrorResponse) {
 	// Error genérico no controlado
 	return http.StatusInternalServerError, ErrorResponse{
 		Error: ErrorDetail{
-			Type:    string(domainErrors.ErrorTypeInternal),
+			Type:    string(apperrors.ErrorTypeInternal),
 			Code:    "INTERNAL_001",
 			Message: "Internal server error",
 		},
@@ -45,17 +45,17 @@ func MapErrorToHttp(err error) (int, ErrorResponse) {
 	}
 }
 
-func getHttpStatusCode(errorType domainErrors.ErrorType) int {
+func getHttpStatusCode(errorType apperrors.ErrorType) int {
 	switch errorType {
-	case domainErrors.ErrorTypeValidation:
+	case apperrors.ErrorTypeValidation:
 		return http.StatusBadRequest
-	case domainErrors.ErrorTypeNotFound:
+	case apperrors.ErrorTypeNotFound:
 		return http.StatusNotFound
-	case domainErrors.ErrorTypeConflict:
+	case apperrors.ErrorTypeConflict:
 		return http.StatusConflict
-	case domainErrors.ErrorTypeUnauthorized:
+	case apperrors.ErrorTypeUnauthorized:
 		return http.StatusUnauthorized
-	case domainErrors.ErrorTypeForbidden:
+	case apperrors.ErrorTypeForbidden:
 		return http.StatusForbidden
 	default:
 		return http.StatusInternalServerError

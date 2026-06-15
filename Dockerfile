@@ -1,27 +1,21 @@
-# microservice Seed - dockerfile
-FROM golang:1.25.5-alpine
-
-
-# Instalar dependencias necesarias
-RUN apk update && apk add --no-cache ca-certificates git
-
-#Establecer directorio de trabajo
+# ================================
+# STAGE 1 : Build
+# ================================
+FROM golang:1.25.5-alpine as builder
 WORKDIR /app
 
-# Copiar archivos de dependencias primero
 COPY go.mod go.sum ./
-
 RUN go mod download
 
 COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/microservice ./cmd/api
 
-# Compilación estática
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-  go build -o microservice ./cmd/api
+# ===============================
+# STAGE 2: RUNTIME
+# ===============================
+FROM gcr.io/distroless/static-debian12:nonroot
 
+COPY --from=builder /app/microservice /microservice
 
-# Exponer puerto
 EXPOSE 3200
-
-# Comando por defecto
-CMD ["./microservice"]
+ENTRYPOINT [ "/microservice" ]

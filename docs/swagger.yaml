@@ -1,0 +1,47 @@
+basePath: /api/v1
+definitions:
+  dto.ErrorResponse:
+    properties:
+      error:
+        example: Service unhealthy
+        type: string
+      timestamp:
+        example: "2024-01-15T10:30:00Z"
+        type: string
+    type: object
+  dto.HealthResponse:
+    properties:
+      service:
+        example: microservice-seed-go
+        type: string
+      timestamp:
+        example: 2024-01-15T10.30:00Z
+        type: string
+    type: object
+host: localhost:3200
+info:
+  contact: {}
+  description: API de ejemplo basada en Clean Architecture
+  title: Microservice API
+  version: "1.0"
+paths:
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: Returns the health status of the service
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.HealthResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Health Check
+      tags:
+      - Health
+swagger: "2.0"

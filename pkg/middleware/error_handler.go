@@ -1,41 +1,40 @@
-package middlewares
+package middleware
 
 import (
-	domainErrors "microservice/pkg/errors"
-	httpMapper "microservice/pkg/http"
-	"microservice/pkg/logger"
+	"microservice/pkg/apperrors"
+	"microservice/pkg/httputil"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
 // ErrorHandlerMiddleware maneja errores globalmente
-func ErrorHandlerMiddleware() gin.HandlerFunc {
+func ErrorHandlerMiddleware(log *zap.Logger) gin.HandlerFunc {
 	return gin.CustomRecovery(func(c *gin.Context, recovered interface{}) {
 		var err error
 
 		switch e := recovered.(type) {
-		case *domainErrors.DomainError:
+		case *apperrors.DomainError:
 			err = e
 		case error:
 			err = e
 		default:
-			err = domainErrors.NewInternalError("PANIC_001", "Unexpected panic occurred")
+			err = apperrors.NewInternalError("PANIC_001", "Unexpected panic occurred")
 		}
 
 		// Mapear error a HTTP
-		statusCode, errorResponse := httpMapper.MapErrorToHttp(err)
+		statusCode, errorResponse := httputil.MapErrorToHttp(err)
 
 		// Log según severidad
 		if statusCode >= 500 {
-			logger.L().Error("Server error",
+			log.Error("Server error",
 				zap.String("error", err.Error()),
 				zap.String("path", c.Request.URL.Path),
 				zap.String("method", c.Request.Method),
 				zap.Int("status", statusCode),
 			)
 		} else {
-			logger.L().Warn("Client error",
+			log.Warn("Client error",
 				zap.String("error", err.Error()),
 				zap.String("path", c.Request.URL.Path),
 				zap.String("method", c.Request.Method),

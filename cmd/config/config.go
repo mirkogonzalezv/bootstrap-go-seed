@@ -7,7 +7,7 @@ import (
 
 type Configuration struct {
 	AppEnv          string `env:"ENVIRONMENT" envDefault:"dev" validate:"oneof= dev qa prod"`
-	Port            int    `env:"PORT" envDefault:"4200"`
+	Port            int    `env:"PORT" envDefault:"3200"`
 	LogLevel        string `env:"LOG_LEVEL" envDefault:"info"`
 	ShutDownTimeOut int    `env:"SHUTDOWN_TIMEOUT" envDefault:"30"`
 	// Se definen las variables de entorno necesarias para el proyecto
