@@ -1,9 +1,11 @@
 package app
 
 import (
+	"context"
 	"microservice/cmd/config"
 	"microservice/cmd/container"
 	"microservice/cmd/routes"
+	"microservice/pkg/database"
 	"microservice/pkg/logger"
 	"microservice/pkg/middleware"
 	"os"
@@ -22,6 +24,7 @@ type App struct {
 	container *container.Container
 	router    *gin.Engine
 	log       *zap.Logger
+	db        database.Database
 }
 
 func NewApp() *App {
@@ -73,7 +76,23 @@ func (a *App) Init() error {
 	// Otros middlewares
 	//...
 
-	c, err := container.NewContainer(a.config, a.log)
+	// Base de datos
+	db, err := database.NewPostgresDatabase(context.Background(), database.PostgresConfig{
+		Host:     cfg.DBHost,
+		Port:     cfg.DBPort,
+		User:     cfg.DBUser,
+		DBName:   cfg.DBName,
+		Password: cfg.DBPassword,
+		SSLMode:  cfg.DBSSLMode,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	a.db = db
+
+	c, err := container.NewContainer(a.config, db, a.log)
 	if err != nil {
 		return err
 	}
