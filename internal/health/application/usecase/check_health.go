@@ -3,7 +3,7 @@ package usecase
 import (
 	"context"
 	"microservice/internal/health/application/dto"
-	"microservice/internal/health/domain"
+	domain "microservice/internal/health/domain/repository"
 )
 
 type HealthUseCase struct {

@@ -62,6 +62,9 @@ const docTemplate = `{
         "dto.HealthResponse": {
             "type": "object",
             "properties": {
+                "database": {
+                    "type": "string"
+                },
                 "service": {
                     "type": "string",
                     "example": "microservice-seed-go"

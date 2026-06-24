@@ -11,6 +11,8 @@ definitions:
     type: object
   dto.HealthResponse:
     properties:
+      database:
+        type: string
       service:
         example: microservice-seed-go
         type: string
