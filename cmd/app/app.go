@@ -8,6 +8,7 @@ import (
 	"microservice/pkg/database"
 	"microservice/pkg/logger"
 	"microservice/pkg/middleware"
+	"microservice/pkg/pubsub"
 	"os"
 
 	_ "microservice/docs"
@@ -25,6 +26,7 @@ type App struct {
 	router    *gin.Engine
 	log       *zap.Logger
 	db        database.Database
+	ps        pubsub.PubSub
 }
 
 func NewApp() *App {
@@ -92,7 +94,14 @@ func (a *App) Init() error {
 
 	a.db = db
 
-	c, err := container.NewContainer(a.config, db, a.log)
+	ps, err := pubsub.NewGCPPubSub(context.Background(), cfg.PubSubProjectID)
+	if err != nil {
+		return err
+	}
+
+	a.ps = ps
+
+	c, err := container.NewContainer(a.config, db, ps, a.log)
 	if err != nil {
 		return err
 	}

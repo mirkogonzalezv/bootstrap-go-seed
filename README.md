@@ -52,7 +52,10 @@ pkg/                        # Utilidades compartidas
 ├── env/                    # Tipos de entorno (dev, qa, prod)
 ├── httputil/               # Mapper errores de dominio → HTTP
 ├── logger/                 # Logger con Zap
-└── middleware/             # Middlewares Gin (error handler, security)
+├── middleware/             # Middlewares Gin (error handler, security)
+└── pubsub/                 # Pub/Sub Provider (interfaz + drivers)
+    ├── pubsub.go           # Interfaz PubSub (Publish, Subscribe, Close, Native)
+    └── gcp.go              # Driver GCP Pub/Sub (NewGCPPubSub)
 ```
 
 ---
@@ -415,6 +418,158 @@ repo := healthInfra.NewMySQLHealthRepository(db)
 
 ---
 
+## Pub/Sub con PubSub Provider
+
+El proyecto sigue el mismo patrón que Database para mensajería asíncrona. La interfaz `PubSub` está en `pkg/pubsub/` y los drivers concretos implementan el contrato.
+
+### Flujo
+
+```
+App.Init()
+  → pubsub.NewGCPPubSub(ctx, projectID)   ← acá se crea el cliente
+  → container.NewContainer(..., ps)        ← container recibe PubSub sin saber el proveedor
+
+Handler (HTTP)
+  → UseCase (lógica de negocio)
+    → Publisher (implementación en infrastructure/)
+      → PubSub.Publish(topic, data, attrs)
+```
+
+### Interfaz `PubSub`
+
+Definida en `pkg/pubsub/pubsub.go`:
+
+```go
+type PubSub interface {
+    Publish(ctx context.Context, topic string, data []byte, attrs map[string]string) error
+    Subscribe(ctx context.Context, subscription string, handler MessageHandler) error
+    Close() error
+    Native() interface{}
+}
+
+type Message struct {
+    ID         string
+    Data       []byte
+    Attributes map[string]string
+    AckFunc    func()
+    NackFunc   func()
+}
+
+type MessageHandler func(ctx context.Context, msg *Message) error
+```
+
+### Driver GCP
+
+`pkg/pubsub/gcp.go` implementa `PubSub` usando `cloud.google.com/go/pubsub/v2`:
+
+```go
+ps, err := pubsub.NewGCPPubSub(context.Background(), cfg.PubSubProjectID)
+```
+
+- Cachea `Publisher` por topic para reutilizar el batching interno del SDK
+- `Subscribe` recibe mensajes vía `Subscriber.Receive` y mapea a `Message` propio
+- `Close()` detiene todos los publishers y cierra el cliente gRPC
+
+### Cableado
+
+Se crea en `cmd/app/app.go` y se cierra en `cmd/app/shutdown.go`:
+
+```go
+// app.go
+ps, err := pubsub.NewGCPPubSub(context.Background(), cfg.PubSubProjectID)
+a.ps = ps
+
+c, err := container.NewContainer(a.config, db, ps, a.log)
+
+// shutdown.go
+if a.ps != nil {
+    a.ps.Close()
+}
+```
+
+---
+
+## Cómo agregar un nuevo proveedor Pub/Sub
+
+Ejemplo: agregar **RabbitMQ** como mensajería.
+
+### 1. Crear el driver en `pkg/pubsub/rabbitmq.go`
+
+```go
+package pubsub
+
+import (
+    "context"
+    "fmt"
+    amqp "github.com/rabbitmq/amqp091-go"
+)
+
+type RabbitMQConfig struct {
+    URL string
+}
+
+type rabbitMQPubSub struct {
+    conn *amqp.Connection
+}
+
+func NewRabbitMQPubSub(ctx context.Context, cfg RabbitMQConfig) (PubSub, error) {
+    conn, err := amqp.Dial(cfg.URL)
+    if err != nil {
+        return nil, fmt.Errorf("pubsub rabbitmq: %w", err)
+    }
+    return &rabbitMQPubSub{conn: conn}, nil
+}
+
+func (p *rabbitMQPubSub) Publish(ctx context.Context, topic string, data []byte, attrs map[string]string) error {
+    ch, _ := p.conn.Channel()
+    defer ch.Close()
+    return ch.PublishWithContext(ctx, topic, "", false, false, amqp.Publishing{
+        ContentType: "application/json",
+        Body:        data,
+    })
+}
+
+func (p *rabbitMQPubSub) Subscribe(ctx context.Context, subscription string, handler MessageHandler) error {
+    ch, _ := p.conn.Channel()
+    msgs, _ := ch.Consume(subscription, "", false, false, false, false, nil)
+    for msg := range msgs {
+        m := &Message{
+            ID:   msg.MessageId,
+            Data: msg.Body,
+            AckFunc: func() { msg.Ack(false) },
+            NackFunc: func() { msg.Nack(false, true) },
+        }
+        if err := handler(ctx, m); err != nil {
+            msg.Nack(false, true)
+            continue
+        }
+        msg.Ack(false)
+    }
+    return nil
+}
+
+func (p *rabbitMQPubSub) Close() error { return p.conn.Close() }
+func (p *rabbitMQPubSub) Native() interface{} { return p.conn }
+```
+
+### 2. Conectar en `cmd/app/app.go`
+
+```go
+ps, err := pubsub.NewRabbitMQPubSub(context.Background(), pubsub.RabbitMQConfig{
+    URL: "amqp://guest:guest@localhost:5672/",
+})
+```
+
+### Resumen por proveedor nuevo
+
+| Qué | Archivos |
+|---|---|
+| Config + factory + struct privado que implementa `PubSub` | 1 archivo: `pkg/pubsub/<driver>.go` |
+| Servicio por módulo (publisher/subscriber) | 1 archivo por módulo en `internal/<módulo>/infrastructure/` |
+| Cableado | `app.go` (crear PubSub) + `container.go` (inyectar al servicio) |
+
+---
+
 ## Tests
 
 Los tests de use cases usan **mocks manuales** (sin frameworks externos):
@@ -542,6 +697,7 @@ Las variables de entorno se cargan automáticamente desde `.env.{environment}` (
 | `DB_PASSWORD` | `postgres` | Contraseña de PostgreSQL |
 | `DB_NAME` | `microservice` | Nombre de la base de datos |
 | `DB_SSL_MODE` | `disable` | Modo SSL (`disable`, `require`, `verify-full`) |
+| `PUBSUB_PROJECT_ID` | `""` | Project ID de GCP para Pub/Sub |
 
 ```bash
 cp .env.example .env.dev
