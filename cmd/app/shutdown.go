@@ -8,9 +8,8 @@ import (
 func (a *App) Shutdown() {
 	logger.General("Cerrando conexiones y recursos...")
 
-	if a.container != nil && a.container.DB != nil {
-		a.container.DB.Close()
-		logger.Success("Pool de DB cerrado")
+	if a.db != nil {
+		a.db.Close()
 	}
 
 	// Cerramos conexiones globales
