@@ -2,23 +2,21 @@ package infrastructure
 
 import (
 	"context"
-	"fmt"
+	"microservice/pkg/database"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type PostgresHealthRepository struct {
-	pool *pgxpool.Pool
+	db database.Database
 }
 
-func NewPostgresHealthRepository(pool *pgxpool.Pool) *PostgresHealthRepository {
-	return &PostgresHealthRepository{pool: pool}
+func NewPostgresHealthRepository(db database.Database) *PostgresHealthRepository {
+	return &PostgresHealthRepository{db: db}
 }
 
 // Implementamos la interfaz del repository
 func (r *PostgresHealthRepository) Ping(ctx context.Context) error {
-	if err := r.pool.Ping(ctx); err != nil {
-		return fmt.Errorf("Health check DB: %w", err)
-	}
-	return nil
+	pool := r.db.Native().(*pgxpool.Pool)
+	return pool.Ping(ctx)
 }

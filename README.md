@@ -46,7 +46,9 @@ internal/                   # ← Módulos de negocio (aquí trabajas)
 migrations/                 # SQL de migraciones (ejecutar a mano)
 pkg/                        # Utilidades compartidas
 ├── apperrors/              # Errores de dominio tipados
-├── database/               # Pool de PostgreSQL portable
+├── database/               # Database Provider (interfaz + drivers)
+│   ├── database.go         # Interfaz Database (Ping, Close, Native)
+│   └── postgres.go         # Driver PostgreSQL (PostgresConfig, NewPostgresDatabase)
 ├── env/                    # Tipos de entorno (dev, qa, prod)
 ├── httputil/               # Mapper errores de dominio → HTTP
 ├── logger/                 # Logger con Zap
@@ -257,17 +259,38 @@ func ConfigureModule(router *gin.Engine, c *container.Container) {
 
 ---
 
-## Base de datos con Repository Pattern
+## Base de datos con Database Provider
 
-El proyecto usa PostgreSQL con `pgx/v5` y sigue el patrón **Repository**:
+El proyecto separa la inicialización de la base de datos en una capa independiente (`pkg/database/`) para que el **container** no dependa del motor concreto. Usa el patrón **Provider**:
 
 ```
+App.Init()
+  → database.NewPostgresDatabase(cfg)   ← acá se crea la DB
+  → container.NewContainer(..., db)     ← container recibe Database sin saber el motor
+
 Handler (HTTP)
   → UseCase (lógica de negocio)
     → Repository (interfaz en domain/)
       → PostgresRepository (implementación en infrastructure/)
-        → pgxpool (pool de conexiones)
+        → Database.Native().(*pgxpool.Pool)
 ```
+
+### Interfaz `Database`
+
+Definida en `pkg/database/database.go`:
+
+```go
+type Database interface {
+    Ping(ctx context.Context) error
+    Close()
+    Native() interface{}
+}
+```
+
+- `Ping` / `Close` — ciclo de vida estándar
+- `Native()` — expone el pool/conexión nativa para que los repositorios hagan type assertion al tipo concreto (`*pgxpool.Pool`, `*sql.DB`, etc.)
+
+Cada driver implementa esta interfaz con su propio struct privado y factory: `PostgresConfig` + `NewPostgresDatabase` en `postgres.go`, etc.
 
 ### Migraciones
 
@@ -279,16 +302,116 @@ psql -d microservice -f migrations/001_create_health_check.up.sql
 
 ### Pool de conexiones
 
-Se crea en `cmd/container/container.go` usando `pkg/database/postgres.go`:
+Se crea en `cmd/app/app.go` usando la factory del driver correspondiente:
 
 ```go
-pool, err := database.NewPool(ctx, database.PostgresConfig{
+db, err := database.NewPostgresDatabase(ctx, database.PostgresConfig{
     Host: cfg.DBHost, Port: cfg.DBPort, User: cfg.DBUser,
     Password: cfg.DBPassword, DBName: cfg.DBName, SSLMode: cfg.DBSSLMode,
 })
 ```
 
-El pool se **cierra automáticamente** en el shutdown de la app.
+La DB se cierra en el shutdown de la app (`cmd/app/shutdown.go`), **no** desde el container.
+
+---
+
+## Cómo agregar un nuevo motor de base de datos
+
+Ejemplo: agregar **MySQL** como segundo motor.
+
+### 1. Crear el driver en `pkg/database/mysql.go`
+
+```go
+package database
+
+import (
+    "context"
+    "database/sql"
+    "fmt"
+    _ "github.com/go-sql-driver/mysql"
+)
+
+type MySQLConfig struct {
+    Host     string
+    Port     int
+    User     string
+    Password string
+    DBName   string
+}
+
+func (c MySQLConfig) DSN() string {
+    return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true",
+        c.User, c.Password, c.Host, c.Port, c.DBName)
+}
+
+type mysqlDatabase struct {
+    db *sql.DB
+}
+
+func (d *mysqlDatabase) Ping(ctx context.Context) error { return d.db.PingContext(ctx) }
+func (d *mysqlDatabase) Close()                         { d.db.Close() }
+func (d *mysqlDatabase) Native() interface{}            { return d.db }
+
+func NewMySQLDatabase(ctx context.Context, cfg MySQLConfig) (Database, error) {
+    db, err := sql.Open("mysql", cfg.DSN())
+    if err != nil {
+        return nil, fmt.Errorf("database mysql: %w", err)
+    }
+    return &mysqlDatabase{db: db}, nil
+}
+```
+
+### 2. Crear la implementación del repositorio para MySQL
+
+`internal/<módulo>/infrastructure/mysql_repo.go`:
+
+```go
+package infrastructure
+
+import (
+    "context"
+    "database/sql"
+    "microservice/pkg/database"
+)
+
+type MySQLHealthRepository struct {
+    db database.Database
+}
+
+func NewMySQLHealthRepository(db database.Database) *MySQLHealthRepository {
+    return &MySQLHealthRepository{db: db}
+}
+
+func (r *MySQLHealthRepository) Ping(ctx context.Context) error {
+    sqlDB := r.db.Native().(*sql.DB)
+    return sqlDB.PingContext(ctx)
+}
+```
+
+### 3. Conectar en `cmd/app/app.go`
+
+```go
+db, err := database.NewMySQLDatabase(context.Background(), database.MySQLConfig{
+    Host: cfg.DBHost, Port: cfg.DBPort, User: cfg.DBUser,
+    Password: cfg.DBPassword, DBName: cfg.DBName,
+})
+```
+
+### 4. Inyectar el repositorio en `cmd/container/container.go`
+
+```go
+repo := healthInfra.NewMySQLHealthRepository(db)
+```
+
+### Resumen por driver nuevo
+
+| Qué | Archivos |
+|---|---|
+| Config + factory + struct privado que implementa `Database` | 1 archivo: `pkg/database/<driver>.go` |
+| Repositorio por módulo (type assertion con `Native()`) | 1 archivo por módulo en `internal/<módulo>/infrastructure/` |
+| Cableado | `app.go` (crear DB) + `container.go` (inyectar repo) |
+
+**El container nunca sabe qué motor es.** Solo recibe `database.Database` y llama al constructor del repo que corresponda.
 
 ---
 
